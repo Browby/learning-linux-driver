@@ -5,67 +5,82 @@
 #include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/kdev_t.h>
+#include <linux/cdev.h>
 
-int valueETX, arr_valueETX[4];
-char *nameETX;
-int cb_valueETX = 0;
-
-//dev_t dev = MKDEV(235, 0);
 dev_t dev = 0;
 static struct class *dev_class;
+static struct cdev etx_cdev;
 
-module_param(valueETX, int, S_IRUSR|S_IWUSR);
-module_param(nameETX, charp, S_IRUSR|S_IWUSR);
-module_param_array(arr_valueETX, int, NULL, S_IRUSR|S_IWUSR);
+static int __init etx_driver_init(void);
+static void __exit etx_driver_exit(void);
+static int etx_open(struct inode *inode, struct file *file);
+static int etx_release(struct inode *inode, struct file *file);
+static ssize_t etx_read(struct file *filp, char __user *buf, size_t len, loff_t *off);
+static ssize_t etx_write(struct file *filp, const char *buf, size_t len, loff_t *off);
 
-int notify_param(const char *val, const struct kernel_param *kp)
+static struct file_operations fops =
 {
-  int res = param_set_int(val, kp);
-  if(res==0){
-    printk(KERN_INFO "Call back function called...\n");
-    printk(KERN_INFO "New value of cb_valueETX = %d\n", cb_valueETX);
-    return 0;
-  }
-  return -1;
-}
-
-const struct kernel_param_ops my_param_ops =
-{
-  .set = &notify_param,
-  .get = &param_get_int,
+.owner      = THIS_MODULE,
+.read       = etx_read,
+.write      = etx_write,
+.open       = etx_open,
+.release    = etx_release,
 };
 
-module_param_cb(cb_valueETX, &my_param_ops, &cb_valueETX, S_IRUGO|S_IWUSR);
-
-static int __init hello_world_init(void)
+static int etx_open(struct inode *inode, struct file *file)
 {
-  int i;
-  if ((alloc_chrdev_region(&dev, 0 ,1, "hello_world"))<0){
+  printk(KERN_INFO "Driver Open function called... !!!\n");
+  return 0;
+}
+
+static int etx_release(struct inode *inode, struct file *file)
+{
+  printk(KERN_INFO "Driver Release function called...!!!\n");
+  return 0;
+}
+
+static ssize_t etx_read(struct file *filp, char __user *buf, size_t len, loff_t *off)
+{
+  printk(KERN_INFO "Driver read function called ...!!!\n");
+  return 0;
+}
+
+static ssize_t etx_write(struct file *filp, const char __user *buf, size_t len, loff_t *off)
+{
+  printk(KERN_INFO "Driver write function called ...!!!!\n");
+  return len;
+}
+
+static int __init etx_driver_init(void)
+{
+  /* Allocating Major number */
+  if ((alloc_chrdev_region(&dev, 0 ,1, "ext_dev"))<0){
     printk(KERN_INFO "Cannot allocate major number for device\n");
     return -1;
   }
   printk(KERN_INFO "Major = %d Minor = %d \n", MAJOR(dev), MINOR(dev));
 
+  /* Creating cdev structure*/
+  cdev_init(&etx_cdev, &fops);
+
+  /*Adding character device to the system*/
+  if((cdev_add(&etx_cdev, dev, 1)) < 0){
+    printk(KERN_INFO "Cannot add the device to the system\n");
+    goto r_class;
+  }
+
   /* Creating struct class */
-  if((dev_class = class_create(THIS_MODULE, "hello_class")) == NULL){
+  if((dev_class = class_create(THIS_MODULE, "etc_class")) == NULL){
     printk(KERN_INFO "Cannot create the struct class for device\n");
     goto r_class;
   }
 
   /* Creating device */
-  if((device_create(dev_class, NULL, dev, NULL, "hello_device")) == NULL){
+  if((device_create(dev_class, NULL, dev, NULL, "etx_device")) == NULL){
     printk(KERN_INFO "Cannot create the Device\n");
     goto r_device;
   }
 
-  //alloc_chrdev_region(&dev, 0, 1, "helloWorldModule_dev");
-  //register_chrdev_region(dev, 1, "helloWorldModule_dev");
-  printk(KERN_INFO "ValueETX = %d \n", valueETX);
-  printk(KERN_INFO "cb_valueETX = %d \n", cb_valueETX);
-  printk(KERN_INFO "NameETX = %s \n", nameETX);
-  for (i = 0; i < (sizeof arr_valueETX / sizeof (int)); i++) {
-    printk(KERN_INFO "Arr_value[%d] = %d\n", i, arr_valueETX[i]);
-  }
   printk(KERN_INFO "Kernel module inserted successfully\n");
   return 0;
 
@@ -76,18 +91,19 @@ r_class:
   return -1;
 }
 
-void __exit hello_world_exit(void)
+static void __exit etx_driver_exit(void)
 {
   device_destroy(dev_class, dev);
   class_destroy(dev_class);
+  cdev_del(&etx_cdev);
   unregister_chrdev_region(dev, 1);
   printk(KERN_INFO "Kernel module removed successfully\n");
 }
 
-module_init(hello_world_init);
-module_exit(hello_world_exit);
+module_init(etx_driver_init);
+module_exit(etx_driver_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Bruno Hendrickx");
-MODULE_DESCRIPTION("Hello world");
+MODULE_DESCRIPTION("A simple device driver");
 MODULE_VERSION("0:0.1");
