@@ -2,10 +2,13 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
+#include <linux/fs.h>
 
 int valueETX, arr_valueETX[4];
 char *nameETX;
 int cb_valueETX = 0;
+
+dev_t dev = MKDEV(235, 0);
 
 module_param(valueETX, int, S_IRUSR|S_IWUSR);
 module_param(nameETX, charp, S_IRUSR|S_IWUSR);
@@ -33,6 +36,8 @@ module_param_cb(cb_valueETX, &my_param_ops, &cb_valueETX, S_IRUGO|S_IWUSR);
 static int __init hello_world_init(void)
 {
   int i;
+  alloc_chrdev_region(&dev, 0, 1, "helloWorldModule_dev");
+  //register_chrdev_region(dev, 1, "helloWorldModule_dev");
   printk(KERN_INFO "ValueETX = %d \n", valueETX);
   printk(KERN_INFO "cb_valueETX = %d \n", cb_valueETX);
   printk(KERN_INFO "NameETX = %s \n", nameETX);
@@ -45,6 +50,7 @@ static int __init hello_world_init(void)
 
 void __exit hello_world_exit(void)
 {
+  unregister_chrdev_region(dev, 1);
   printk(KERN_INFO "Kernel module removed successfully\n");
 }
 
