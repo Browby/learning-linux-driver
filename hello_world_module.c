@@ -1,15 +1,19 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/moduleparam.h>
 #include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/kdev_t.h>
 #include <linux/cdev.h>
+#include <linux/slab.h>         //kmalloc()
+#include <linux/uaccess.h>      //copy_to/from_user()
+
+#define mem_size 1024
 
 dev_t dev = 0;
 static struct class *dev_class;
 static struct cdev etx_cdev;
+uint8_t *kernel_buffer;
 
 static int __init etx_driver_init(void);
 static void __exit etx_driver_exit(void);
@@ -29,25 +33,32 @@ static struct file_operations fops =
 
 static int etx_open(struct inode *inode, struct file *file)
 {
+  if((kernel_buffer = kmalloc(mem_size, GFP_KERNEL)) == 0){
+    printk(KERN_INFO "Cannot allocate memory in kernel\n");
+    return -1;
+  }
   printk(KERN_INFO "Driver Open function called... !!!\n");
   return 0;
 }
 
 static int etx_release(struct inode *inode, struct file *file)
 {
-  printk(KERN_INFO "Driver Release function called...!!!\n");
+  kfree(kernel_buffer);
+  printk(KERN_INFO "Device file closed...!!!\n");
   return 0;
 }
 
 static ssize_t etx_read(struct file *filp, char __user *buf, size_t len, loff_t *off)
 {
-  printk(KERN_INFO "Driver read function called ...!!!\n");
-  return 0;
+  copy_to_user(buf, kernel_buffer, mem_size);
+  printk(KERN_INFO "Data Read : Done!\n");
+  return mem_size;
 }
 
 static ssize_t etx_write(struct file *filp, const char __user *buf, size_t len, loff_t *off)
 {
-  printk(KERN_INFO "Driver write function called ...!!!!\n");
+  copy_from_user(kernel_buffer, buf, len);
+  printk(KERN_INFO "Data Write : Done!\n");
   return len;
 }
 
@@ -70,7 +81,7 @@ static int __init etx_driver_init(void)
   }
 
   /* Creating struct class */
-  if((dev_class = class_create(THIS_MODULE, "etc_class")) == NULL){
+  if((dev_class = class_create(THIS_MODULE, "etx_class")) == NULL){
     printk(KERN_INFO "Cannot create the struct class for device\n");
     goto r_class;
   }
