@@ -8,11 +8,14 @@
 #include <linux/slab.h>         //kmalloc()
 #include <linux/uaccess.h>      //copy_to/from_user()
 #include <linux/ioctl.h>
+#include <linux/proc_fs.h>
 
 #define WR_VALUE _IOW('a', 'a', int32_t*)
 #define RD_VALUE _IOR('a', 'b', int32_t*)
 
 int32_t value = 0;
+char etx_array[20]="try_proc_array\n";
+static int len = 1;
 
 dev_t dev = 0;
 static struct class *dev_class;
@@ -21,11 +24,17 @@ uint8_t *kernel_buffer;
 
 static int __init etx_driver_init(void);
 static void __exit etx_driver_exit(void);
+/** Driver functions **/
 static int etx_open(struct inode *inode, struct file *file);
 static int etx_release(struct inode *inode, struct file *file);
 static ssize_t etx_read(struct file *filp, char __user *buf, size_t len, loff_t *off);
 static ssize_t etx_write(struct file *filp, const char *buf, size_t len, loff_t *off);
 static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+/** Procfs functions **/
+static int open_proc(struct inode *inode, struct file *file);
+static int release_proc(struct inode *inod, struct file *file);
+static ssize_t read_proc(struct file *filp, char __user *buffer, size_t length, loff_t *offset);
+static ssize_t write_proc(struct file *filp, const char *buff, size_t len, loff_t *off);
 
 static struct file_operations fops =
 {
@@ -36,6 +45,45 @@ static struct file_operations fops =
 .unlocked_ioctl    = etx_ioctl,
 .release           = etx_release,
 };
+
+static struct file_operations proc_fops = {
+.open = open_proc,
+.read = read_proc,
+.write = write_proc,
+.release = release_proc
+};
+
+static int open_proc(struct inode *inode, struct file *file)
+{
+  printk(KERN_INFO "proc file opened.....\n");
+  return 0;
+}
+
+static int release_proc(struct inode *inode, struct file *file)
+{
+  printk(KERN_INFO "proc file is released.......\n");
+  return 0;
+}
+
+static ssize_t read_proc(struct file *filp, char __user *buffer, size_t length, loff_t *offset)
+{
+  printk(KERN_INFO "proc file read....\n");
+  if(len)
+    len=0;
+  else{
+    len=1;
+    return 0;
+  }
+  copy_to_user(buffer, etx_array,20);
+  return length;
+}
+
+static ssize_t write_proc(struct file* filp, const char *buff, size_t len, loff_t *off)
+{
+  printk(KERN_INFO "proc file wrote.....\n");
+  copy_from_user(etx_array, buff, len);
+  return len;
+}
 
 static int etx_open(struct inode *inode, struct file *file)
 {
@@ -105,6 +153,9 @@ static int __init etx_driver_init(void)
     goto r_device;
   }
 
+  /*Creating proc entry*/
+  proc_create("etx_proc", 0666, NULL, &proc_fops);
+
   printk(KERN_INFO "Kernel module inserted successfully\n");
   return 0;
 
@@ -117,6 +168,7 @@ r_class:
 
 static void __exit etx_driver_exit(void)
 {
+  remove_proc_entry("etx_proc", NULL);
   device_destroy(dev_class, dev);
   class_destroy(dev_class);
   cdev_del(&etx_cdev);
