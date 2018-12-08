@@ -7,8 +7,12 @@
 #include <linux/cdev.h>
 #include <linux/slab.h>         //kmalloc()
 #include <linux/uaccess.h>      //copy_to/from_user()
+#include <linux/ioctl.h>
 
-#define mem_size 1024
+#define WR_VALUE _IOW('a', 'a', int32_t*)
+#define RD_VALUE _IOR('a', 'b', int32_t*)
+
+int32_t value = 0;
 
 dev_t dev = 0;
 static struct class *dev_class;
@@ -21,45 +25,54 @@ static int etx_open(struct inode *inode, struct file *file);
 static int etx_release(struct inode *inode, struct file *file);
 static ssize_t etx_read(struct file *filp, char __user *buf, size_t len, loff_t *off);
 static ssize_t etx_write(struct file *filp, const char *buf, size_t len, loff_t *off);
+static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 
 static struct file_operations fops =
 {
-.owner      = THIS_MODULE,
-.read       = etx_read,
-.write      = etx_write,
-.open       = etx_open,
-.release    = etx_release,
+.owner             = THIS_MODULE,
+.read              = etx_read,
+.write             = etx_write,
+.open              = etx_open,
+.unlocked_ioctl    = etx_ioctl,
+.release           = etx_release,
 };
 
 static int etx_open(struct inode *inode, struct file *file)
 {
-  if((kernel_buffer = kmalloc(mem_size, GFP_KERNEL)) == 0){
-    printk(KERN_INFO "Cannot allocate memory in kernel\n");
-    return -1;
-  }
   printk(KERN_INFO "Driver Open function called... !!!\n");
   return 0;
 }
 
 static int etx_release(struct inode *inode, struct file *file)
 {
-  kfree(kernel_buffer);
   printk(KERN_INFO "Device file closed...!!!\n");
   return 0;
 }
 
 static ssize_t etx_read(struct file *filp, char __user *buf, size_t len, loff_t *off)
 {
-  copy_to_user(buf, kernel_buffer, mem_size);
-  printk(KERN_INFO "Data Read : Done!\n");
-  return mem_size;
+  printk(KERN_INFO "Read Function!\n");
+  return 0;
 }
 
 static ssize_t etx_write(struct file *filp, const char __user *buf, size_t len, loff_t *off)
 {
-  copy_from_user(kernel_buffer, buf, len);
-  printk(KERN_INFO "Data Write : Done!\n");
-  return len;
+  printk(KERN_INFO "Write Function!\n");
+  return 0;
+}
+
+static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+  switch(cmd) {
+    case WR_VALUE:
+      copy_from_user(&value, (int32_t*) arg, sizeof(value));
+      printk(KERN_INFO "Value = %d\n", value);
+      break;
+    case RD_VALUE:
+      copy_to_user((int32_t*) arg, &value, sizeof(value));
+      break;
+  }
+  return 0;
 }
 
 static int __init etx_driver_init(void)
